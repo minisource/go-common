@@ -1,0 +1,26 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "db/sqlc/migration"
+    queries: "db/sqlc/query"
+    gen:
+      go:
+        package: "repo"
+        out: "db/sqlc/repo"
+        emit_json_tags: true
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "json"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
+          - db_type: "jsonb"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
+overrides:
+  go:

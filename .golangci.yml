@@ -1,0 +1,221 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Default linters
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    
+    # Additional linters
+    - bodyclose
+    - contextcheck
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - forcetypeassert
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofmt
+    - goimports
+    - gomnd
+    - gomoddirectives
+    - goprintffuncname
+    - gosec
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tenv
+    - tparallel
+    - unconvert
+    - unparam
+    - wastedassign
+    - whitespace
+
+  disable:
+    - exhaustruct  # Too strict for DTOs
+    - gochecknoglobals  # We use global loggers
+    - ireturn  # Too restrictive
+    - varnamelen  # Sometimes short names are fine
+    - wrapcheck  # Not all errors need wrapping
+    - lll  # Line length handled by formatter
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - (io.Closer).Close
+      - (net/http.ResponseWriter).Write
+
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # Too noisy
+
+  staticcheck:
+    checks: ["all"]
+
+  gocyclo:
+    min-complexity: 15
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam  # Can be noisy
+      - rangeValCopy
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/minisource
+
+  gomnd:
+    settings:
+      mnd:
+        checks:
+          - argument
+          - case
+          - condition
+          - return
+        ignored-numbers:
+          - "0"
+          - "1"
+          - "2"
+          - "10"
+          - "100"
+        ignored-functions:
+          - "strconv.Parse*"
+          - "strconv.Format*"
+          - "time.Duration"
+          - "make"
+
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (use errcheck instead)
+      - G304  # File path provided as taint input
+
+  misspell:
+    locale: US
+
+  nakedret:
+    max-func-lines: 30
+
+  nestif:
+    min-complexity: 4
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: var-declaration
+      - name: var-naming
+
+  stylecheck:
+    checks: ["all", "-ST1000", "-ST1003", "-ST1016"]
+    dot-import-whitelist: []
+    initialisms: ["ACL", "API", "ASCII", "CPU", "CSS", "DNS", "EOF", "GUID", "HTML", "HTTP", "HTTPS", "ID", "IP", "JSON", "JWT", "QPS", "RAM", "RPC", "SLA", "SMTP", "SQL", "SSH", "TCP", "TLS", "TTL", "UDP", "UI", "GID", "UID", "UUID", "URI", "URL", "UTF8", "VM", "XML", "XMPP", "XSRF", "XSS", "SIP", "RTP", "AMQP", "DB", "TS"]
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10
+  
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - dupl
+        - gomnd
+        - goconst
+        - gosec
+        - noctx
+        - forcetypeassert
+
+    # Exclude some linters from running on generated files
+    - path: \.pb\.go$
+      linters:
+        - all
+
+    # Allow magic numbers in configuration
+    - path: config/
+      linters:
+        - gomnd
+
+    # Allow init functions in cmd
+    - path: cmd/
+      linters:
+        - gochecknoinits
+
+    # Allow dot imports in tests
+    - path: _test\.go
+      text: "should not use dot imports"
+
+  exclude-use-default: false
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
+    - "exported (type|method|function) .* should have comment or be unexported"
+
+severity:
+  default-severity: error
+  rules:
+    - linters:
+        - dupl
+      severity: warning
+    - linters:
+        - gomnd
+      severity: warning
+    - linters:
+        - goconst
+      severity: warning

@@ -1,0 +1,35 @@
+name: Auto Tagging with Timestamp
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch Tags
+        run: git fetch --tags
+
+      - name: Auto Tag with Timestamp
+        run: |
+          # Generate timestamp-based tag in the format vYYYYMMDD-HHMMSS
+          TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+          NEW_TAG="v$TIMESTAMP"
+          
+          echo "New Tag: $NEW_TAG"
+          
+          # Tagging and pushing the new version
+          git tag $NEW_TAG
+          git tag -f latest  # Force update 'latest' tag to the current commit
+          git push origin $NEW_TAG
+          git push origin latest --force
