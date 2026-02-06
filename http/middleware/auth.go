@@ -1,6 +1,10 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -477,4 +481,240 @@ func HasScope(c *fiber.Ctx, scope string) bool {
 		}
 	}
 	return false
+}
+
+// ========================================
+// OAuth Token Introspection Middleware
+// ========================================
+
+// OAuthIntrospectionConfig holds configuration for OAuth token introspection
+type OAuthIntrospectionConfig struct {
+	// Enabled determines if auth is required
+	Enabled bool
+	// IntrospectionURL is the OAuth introspection endpoint
+	IntrospectionURL string
+	// ClientID is the OAuth client ID for this service
+	ClientID string
+	// ClientSecret is the OAuth client secret for this service
+	ClientSecret string
+	// SkipPaths are paths that don't require authentication
+	SkipPaths []string
+	// TokenLookup defines how to extract token (default: header:Authorization)
+	TokenLookup string
+	// AuthScheme is the authorization scheme (default: Bearer)
+	AuthScheme string
+	// HTTPTimeout is the timeout for introspection requests (default: 5s)
+	HTTPTimeout time.Duration
+	// ErrorHandler handles authentication errors
+	ErrorHandler fiber.ErrorHandler
+	// RequiredScopes are scopes that must be present
+	RequiredScopes []string
+	// httpClient is reused for introspection requests
+	httpClient *http.Client
+}
+
+// IntrospectionResponse represents the OAuth token introspection response
+type IntrospectionResponse struct {
+	Active    bool     `json:"active"`
+	ClientID  string   `json:"client_id"`
+	TokenType string   `json:"token_type"`
+	Scope     string   `json:"scope"`
+	Scopes    []string `json:"scopes"`
+	ExpiresAt int64    `json:"exp"`
+	IssuedAt  int64    `json:"iat"`
+	Subject   string   `json:"sub"`
+	Audience  string   `json:"aud"`
+	Issuer    string   `json:"iss"`
+	TenantID  string   `json:"tenant_id,omitempty"`
+	Extra     map[string]interface{} `json:"extra,omitempty"`
+}
+
+// DefaultOAuthIntrospectionConfig returns default OAuth introspection config
+func DefaultOAuthIntrospectionConfig() OAuthIntrospectionConfig {
+	return OAuthIntrospectionConfig{
+		Enabled:     true,
+		TokenLookup: "header:Authorization",
+		AuthScheme:  "Bearer",
+		HTTPTimeout: 5 * time.Second,
+		SkipPaths:   []string{"/health", "/ready", "/metrics"},
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "Unauthorized",
+				"message": err.Error(),
+			})
+		},
+	}
+}
+
+// OAuthIntrospectionMiddleware creates middleware that validates tokens via OAuth introspection
+func OAuthIntrospectionMiddleware(config OAuthIntrospectionConfig) fiber.Handler {
+	// Set defaults
+	if config.TokenLookup == "" {
+		config.TokenLookup = "header:Authorization"
+	}
+	if config.AuthScheme == "" {
+		config.AuthScheme = "Bearer"
+	}
+	if config.HTTPTimeout == 0 {
+		config.HTTPTimeout = 5 * time.Second
+	}
+	if config.ErrorHandler == nil {
+		config.ErrorHandler = func(c *fiber.Ctx, err error) error {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error":   "Unauthorized",
+				"message": err.Error(),
+			})
+		}
+	}
+	
+	// Create reusable HTTP client
+	config.httpClient = &http.Client{
+		Timeout: config.HTTPTimeout,
+	}
+
+	return func(c *fiber.Ctx) error {
+		// Check if auth is disabled
+		if !config.Enabled {
+			return c.Next()
+		}
+
+		// Check if path should be skipped
+		path := c.Path()
+		for _, skipPath := range config.SkipPaths {
+			if strings.HasPrefix(path, skipPath) || path == skipPath {
+				return c.Next()
+			}
+		}
+
+		// Extract token
+		token := extractTokenFromRequest(c, config.TokenLookup, config.AuthScheme)
+		if token == "" {
+			return config.ErrorHandler(c, fiber.NewError(fiber.StatusUnauthorized, "No token provided"))
+		}
+
+		// Introspect token
+		introspection, err := introspectToken(config, token)
+		if err != nil {
+			return config.ErrorHandler(c, err)
+		}
+
+		if !introspection.Active {
+			return config.ErrorHandler(c, fiber.NewError(fiber.StatusUnauthorized, "Token is not active"))
+		}
+
+		// Check required scopes
+		if len(config.RequiredScopes) > 0 {
+			scopes := introspection.Scopes
+			if len(scopes) == 0 && introspection.Scope != "" {
+				scopes = strings.Split(introspection.Scope, " ")
+			}
+			
+			for _, required := range config.RequiredScopes {
+				found := false
+				for _, scope := range scopes {
+					if scope == required || scope == "*" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+						"success": false,
+						"error":   "Forbidden",
+						"message": "Insufficient scopes",
+					})
+				}
+			}
+		}
+
+		// Store introspection data in context
+		c.Locals("oauth", introspection)
+		c.Locals("clientId", introspection.ClientID)
+		c.Locals("tokenType", introspection.TokenType)
+		c.Locals("tenantId", introspection.TenantID)
+		
+		scopes := introspection.Scopes
+		if len(scopes) == 0 && introspection.Scope != "" {
+			scopes = strings.Split(introspection.Scope, " ")
+		}
+		c.Locals("scopes", scopes)
+
+		return c.Next()
+	}
+}
+
+// introspectToken calls the OAuth introspection endpoint
+func introspectToken(config OAuthIntrospectionConfig, token string) (*IntrospectionResponse, error) {
+	// Build request body
+	body := map[string]string{
+		"token":         token,
+		"client_id":     config.ClientID,
+		"client_secret": config.ClientSecret,
+	}
+	
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "Failed to marshal request")
+	}
+
+	// Create request
+	req, err := http.NewRequest("POST", config.IntrospectionURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "Failed to create request")
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := config.httpClient.Do(req)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "Auth service unavailable")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fiber.NewError(fiber.StatusUnauthorized, "Token introspection failed")
+	}
+
+	// Parse response
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "Failed to read response")
+	}
+
+	var introspection IntrospectionResponse
+	if err := json.Unmarshal(respBody, &introspection); err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "Failed to parse response")
+	}
+
+	return &introspection, nil
+}
+
+// GetIntrospectionFromContext extracts OAuth introspection from fiber context
+func GetIntrospectionFromContext(c *fiber.Ctx) *IntrospectionResponse {
+	introspection, ok := c.Locals("oauth").(*IntrospectionResponse)
+	if !ok {
+		return nil
+	}
+	return introspection
+}
+
+// GetClientIDFromContext extracts client ID from fiber context
+func GetClientIDFromContext(c *fiber.Ctx) string {
+	clientID, ok := c.Locals("clientId").(string)
+	if !ok {
+		return ""
+	}
+	return clientID
+}
+
+// GetScopesFromContext extracts scopes from fiber context
+func GetScopesFromContext(c *fiber.Ctx) []string {
+	scopes, ok := c.Locals("scopes").([]string)
+	if !ok {
+		return nil
+	}
+	return scopes
 }

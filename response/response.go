@@ -214,3 +214,41 @@ func InternalError(c *fiber.Ctx, message string) error {
 func ServiceUnavailable(c *fiber.Ctx, message string) error {
 	return New().Status(http.StatusServiceUnavailable).Error("SERVICE_UNAVAILABLE", message).Send(c)
 }
+
+// ============================================
+// Common response types for swagger docs
+// ============================================
+
+// HealthResponse represents a health check response
+type HealthResponse struct {
+	Status    string            `json:"status"`
+	Timestamp string            `json:"timestamp"`
+	Services  map[string]string `json:"services,omitempty"`
+	Version   string            `json:"version,omitempty"`
+	Uptime    string            `json:"uptime,omitempty"`
+}
+
+// SuccessMessage represents a simple success response with a message
+type SuccessMessage struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// ReadinessResponse represents readiness check response
+type ReadinessResponse struct {
+	Ready   bool   `json:"ready"`
+	Message string `json:"message"`
+}
+
+// LivenessResponse represents liveness check response
+type LivenessResponse struct {
+	Alive bool `json:"alive"`
+}
+
+// OKMessage sends a success response with a message
+func OKMessage(c *fiber.Ctx, message string) error {
+	return c.JSON(SuccessMessage{
+		Success: true,
+		Message: message,
+	})
+}
