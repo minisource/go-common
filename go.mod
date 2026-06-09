@@ -68,7 +68,7 @@ require (
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-resty/resty/v2 v2.16.5
-	github.com/gofiber/fiber/v2 v2.52.6
+	github.com/gofiber/fiber/v2 v2.52.11
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lib/pq v1.11.1
 	github.com/mattn/go-colorable v0.1.13 // indirect
