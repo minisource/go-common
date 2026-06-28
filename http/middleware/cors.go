@@ -1,37 +1,46 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
-// Cors creates a middleware with custom CORS configuration
+// Cors creates a middleware with custom CORS configuration.
+// allowOrigins can be "*" or a comma-separated list of origins.
+// Uses Origin request-header echo for proper CORS compliance with multiple origins.
 func Cors(allowOrigins string) fiber.Handler {
-    return func(c *fiber.Ctx) error {
-        // Set CORS headers
-        c.Set("Access-Control-Allow-Origin", allowOrigins)
-        c.Set("Access-Control-Allow-Credentials", "true")
-        c.Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-        c.Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, UPDATE")
-        c.Set("Access-Control-Max-Age", "21600")
-        c.Set("Content-Type", "application/json")
+	// Build origin lookup map for O(1) matching
+	originMap := make(map[string]bool)
+	for _, o := range strings.Split(allowOrigins, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			originMap[o] = true
+		}
+	}
+	isWildcard := allowOrigins == "*"
 
-        // Handle preflight requests
-        if c.Method() == "OPTIONS" {
-            return c.SendStatus(204)
-        }
+	return func(c *fiber.Ctx) error {
+		if isWildcard {
+			c.Set("Access-Control-Allow-Origin", "*")
+		} else {
+			origin := c.Get("Origin")
+			if originMap[origin] {
+				c.Set("Access-Control-Allow-Origin", origin)
+				c.Set("Access-Control-Allow-Credentials", "true")
+			}
+			// Non-matching origins: no Access-Control-Allow-Origin set → browser blocks the request
+		}
 
-        return c.Next()
-    }
-}
+		c.Set("Access-Control-Allow-Headers", "Authorization,Content-Type,Accept,Origin,X-Tenant-Id,X-Project-Id,X-Request-Id,Idempotency-Key")
+		c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Set("Access-Control-Expose-Headers", "X-Request-Id")
+		c.Set("Access-Control-Max-Age", "21600")
 
-// Alternative using Fiber's built-in CORS middleware
-func CorsWithConfig(allowOrigins string) fiber.Handler {
-    return cors.New(cors.Config{
-        AllowOrigins:     allowOrigins,
-        AllowCredentials: true,
-        AllowHeaders:     "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With",
-        AllowMethods:     "POST, GET, OPTIONS, PUT, DELETE, UPDATE",
-        MaxAge:           21600,
-    })
+		if c.Method() == "OPTIONS" {
+			return c.SendStatus(204)
+		}
+
+		return c.Next()
+	}
 }

@@ -215,6 +215,11 @@ func ServiceUnavailable(c *fiber.Ctx, message string) error {
 	return New().Status(http.StatusServiceUnavailable).Error("SERVICE_UNAVAILABLE", message).Send(c)
 }
 
+// NotImplemented sends a 501 error
+func NotImplemented(c *fiber.Ctx, message string) error {
+	return New().Status(http.StatusNotImplemented).Error("NOT_IMPLEMENTED", message).Send(c)
+}
+
 // ============================================
 // Common response types for swagger docs
 // ============================================
