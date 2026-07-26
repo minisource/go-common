@@ -65,4 +65,6 @@ const (
 	TenantID  ExtraKey = "TenantID"
 	Email     ExtraKey = "Email"
 	SessionID ExtraKey = "SessionID"
+	TraceID   ExtraKey = "trace_id"
+	SpanID    ExtraKey = "span_id"
 )

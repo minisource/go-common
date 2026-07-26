@@ -3,6 +3,8 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -38,6 +40,55 @@ func DefaultConfig() Config {
 	}
 }
 
+// LoadConfigFromEnv loads tracing config from environment variables
+func LoadConfigFromEnv() Config {
+	cfg := DefaultConfig()
+
+	if enabledStr, exists := os.LookupEnv("OTEL_ENABLED"); exists {
+		if val, err := strconv.ParseBool(enabledStr); err == nil {
+			cfg.Enabled = val
+		}
+	} else if enabledStr, exists := os.LookupEnv("TRACING_ENABLED"); exists {
+		if val, err := strconv.ParseBool(enabledStr); err == nil {
+			cfg.Enabled = val
+		}
+	}
+
+	if svcName, exists := os.LookupEnv("OTEL_SERVICE_NAME"); exists {
+		cfg.ServiceName = svcName
+	} else if svcName, exists := os.LookupEnv("TRACING_SERVICE_NAME"); exists {
+		cfg.ServiceName = svcName
+	}
+
+	if endpoint, exists := os.LookupEnv("OTEL_EXPORTER_OTLP_ENDPOINT"); exists {
+		cfg.CollectorURL = sanitizeEndpoint(endpoint)
+	} else if endpoint, exists := os.LookupEnv("JAEGER_URL"); exists {
+		cfg.CollectorURL = sanitizeEndpoint(endpoint)
+	}
+
+	if samplerArg, exists := os.LookupEnv("OTEL_TRACES_SAMPLER_ARG"); exists {
+		if rate, err := strconv.ParseFloat(samplerArg, 64); err == nil {
+			cfg.SamplingRate = rate
+		}
+	}
+
+	if env, exists := os.LookupEnv("APP_ENV"); exists {
+		cfg.Environment = env
+	}
+
+	return cfg
+}
+
+func sanitizeEndpoint(endpoint string) string {
+	if len(endpoint) > 7 && endpoint[:7] == "http://" {
+		return endpoint[7:]
+	}
+	if len(endpoint) > 8 && endpoint[:8] == "https://" {
+		return endpoint[8:]
+	}
+	return endpoint
+}
+
 // Tracer wraps OpenTelemetry tracer
 type Tracer struct {
 	provider *sdktrace.TracerProvider
@@ -55,13 +106,12 @@ func InitTracer(ctx context.Context, cfg Config) (*Tracer, error) {
 		}, nil
 	}
 
-	// Create OTLP exporter
+	// Create OTLP exporter without blocking dial to fail safe if collector is down
 	conn, err := grpc.DialContext(ctx, cfg.CollectorURL,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to collector: %w", err)
+		return nil, fmt.Errorf("failed to dial collector: %w", err)
 	}
 
 	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))

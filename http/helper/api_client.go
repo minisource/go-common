@@ -3,6 +3,7 @@ package helper
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -122,7 +123,7 @@ func (r *APIClient) GetJSON(endpoint string, result interface{}) error {
 		return resp.Error
 	}
 	if resp.StatusCode >= 400 {
-		return errors.New("request failed with status: " + string(resp.StatusCode))
+		return errors.New("request failed with status: " + strconv.Itoa(resp.StatusCode))
 	}
 	return json.Unmarshal(resp.Body, result)
 }
@@ -134,7 +135,7 @@ func (r *APIClient) PostJSON(endpoint string, body, result interface{}) error {
 		return resp.Error
 	}
 	if resp.StatusCode >= 400 {
-		return errors.New("request failed with status: " + string(resp.StatusCode))
+		return errors.New("request failed with status: " + strconv.Itoa(resp.StatusCode))
 	}
 	return json.Unmarshal(resp.Body, result)
 }

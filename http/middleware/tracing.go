@@ -54,6 +54,11 @@ func Tracing(config TracingConfig) fiber.Handler {
 		// Store context with span
 		c.SetUserContext(ctx)
 
+		// Add trace ID to response header
+		if span.SpanContext().HasTraceID() {
+			c.Set("X-Trace-ID", span.SpanContext().TraceID().String())
+		}
+
 		// Call next handler
 		err := c.Next()
 
