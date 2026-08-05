@@ -9,6 +9,7 @@ import (
 )
 
 func TestNewLoggerZap(t *testing.T) {
+	ResetForTesting()
 	cfg := &LoggerConfig{
 		Level:       "debug",
 		Logger:      "zap",
@@ -21,6 +22,7 @@ func TestNewLoggerZap(t *testing.T) {
 }
 
 func TestNewLoggerZerolog(t *testing.T) {
+	ResetForTesting()
 	cfg := &LoggerConfig{
 		Level:       "info",
 		Logger:      "zerolog",
@@ -32,6 +34,7 @@ func TestNewLoggerZerolog(t *testing.T) {
 }
 
 func TestNewLoggerFiber(t *testing.T) {
+	ResetForTesting()
 	cfg := &LoggerConfig{
 		Level:       "info",
 		Logger:      "fiber",
@@ -43,6 +46,7 @@ func TestNewLoggerFiber(t *testing.T) {
 }
 
 func TestLoggerWithFilePath(t *testing.T) {
+	ResetForTesting()
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "test.log")
 
@@ -68,6 +72,7 @@ func TestLoggerWithFilePath(t *testing.T) {
 }
 
 func TestLoggerLevels(t *testing.T) {
+	ResetForTesting()
 	cfg := &LoggerConfig{
 		Level:       "debug",
 		Logger:      "zap",
@@ -90,6 +95,7 @@ func TestLoggerLevels(t *testing.T) {
 }
 
 func TestLoggerFormattedOutput(t *testing.T) {
+	ResetForTesting()
 	cfg := &LoggerConfig{
 		Level:       "debug",
 		Logger:      "zap",

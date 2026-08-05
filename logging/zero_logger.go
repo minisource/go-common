@@ -14,6 +14,14 @@ import (
 var once sync.Once
 var zeroSinLogger *zerolog.Logger
 
+// ResetForTesting resets the singleton loggers for isolated test runs.
+// Must be called before each test that creates a logger.
+func ResetForTesting() {
+	once = sync.Once{}
+	zapSinLogger = nil
+	zeroSinLogger = nil
+}
+
 type zeroLogger struct {
 	cfg    *LoggerConfig
 	logger *zerolog.Logger
