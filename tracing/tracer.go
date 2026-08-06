@@ -119,11 +119,15 @@ func InitTracer(ctx context.Context, cfg Config) (*Tracer, error) {
 		return nil, fmt.Errorf("failed to create exporter: %w", err)
 	}
 
-	// Create resource with service information
+	// Create resource with service information.
+	// resource.Default() carries the SDK's own schema URL; merging a resource
+	// built with a different semconv schema URL fails with a schema conflict,
+	// so we reuse the default resource's schema URL for our attributes.
+	defRes := resource.Default()
 	res, err := resource.Merge(
-		resource.Default(),
+		defRes,
 		resource.NewWithAttributes(
-			semconv.SchemaURL,
+			defRes.SchemaURL(),
 			semconv.ServiceName(cfg.ServiceName),
 			semconv.ServiceVersion(cfg.ServiceVersion),
 			attribute.String("environment", cfg.Environment),

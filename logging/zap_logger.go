@@ -11,6 +11,22 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// zapcoreTimeEncoder is a custom time encoder that outputs RFC3339Nano with colon
+// in the timezone offset (e.g. "2026-08-03T10:33:57.431+03:30").
+// This is compatible with Promtail's RFC3339Nano timestamp parsing.
+// zapcore.ISO8601TimeEncoder produces "+0330" (no colon), which is not valid RFC3339.
+func zapcoreTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	type appendTimeEncoder interface {
+		AppendTimeLayout(time.Time, string)
+	}
+	if tz, _ := t.Zone(); tz != "" {
+		// Use RFC3339Nano — Go's time.Format produces the correct colon offset.
+		enc.AppendString(t.Format(time.RFC3339Nano))
+	} else {
+		enc.AppendString(t.UTC().Format(time.RFC3339Nano))
+	}
+}
+
 var zapSinLogger *zap.SugaredLogger
 
 type zapLogger struct {
@@ -43,7 +59,7 @@ func (l *zapLogger) getLogLevel() zapcore.Level {
 func (l *zapLogger) Init() {
 	once.Do(func() {
 		config := zap.NewProductionEncoderConfig()
-		config.EncodeTime = zapcore.ISO8601TimeEncoder
+		config.EncodeTime = zapcoreTimeEncoder
 
 		var core zapcore.Core
 

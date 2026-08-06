@@ -72,6 +72,11 @@ func NewClient(cfg Config) *Client {
 		cfg.RetryConfig = DefaultRetryConfig()
 	}
 
+	// A nil logger would panic on the first request — default to a no-op.
+	if cfg.Logger == nil {
+		cfg.Logger = logging.NopLogger{}
+	}
+
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: cfg.Timeout,
